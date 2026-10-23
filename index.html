@@ -150,10 +150,76 @@
     });
   });
 
+  /* ---- Dịch menu của trình giả lập sang tiếng Việt ---- */
+  var VI = {
+    'Restart': 'Khởi động lại',
+    'Pause': 'Tạm dừng',
+    'Play': 'Tiếp tục',
+    'Save State': 'Lưu trạng thái',
+    'Load State': 'Tải trạng thái',
+    'Quick Save': 'Lưu nhanh',
+    'Quick Load': 'Tải nhanh',
+    'Control Settings': 'Cài đặt điều khiển',
+    'Cheats': 'Mã cheat',
+    'Cache Manager': 'Quản lý bộ nhớ đệm',
+    'Export Save File': 'Xuất file save',
+    'Import Save File': 'Nhập file save',
+    'Context Menu': 'Menu phụ',
+    'Settings': 'Cài đặt',
+    'Enter Fullscreen': 'Toàn màn hình',
+    'Exit Fullscreen': 'Thoát toàn màn hình',
+    'Exit Emulation': 'Thoát game',
+    'Netplay': 'Chơi mạng',
+    'Screenshot': 'Chụp màn hình',
+    'Take Screenshot': 'Chụp màn hình',
+    'Fast': 'Nhanh',
+    'Slow': 'Chậm',
+    'Close': 'Đóng',
+    'Cancel': 'Hủy',
+    'Reset': 'Đặt lại',
+    'Save': 'Lưu',
+    'Load': 'Tải',
+    'Enabled': 'Bật',
+    'Disabled': 'Tắt',
+    'Shader': 'Bộ lọc hình ảnh',
+    'Volume': 'Âm lượng',
+    'Mute': 'Tắt tiếng',
+    'Unmute': 'Bật tiếng'
+  };
+
+  function translateText(node) {
+    var raw = node.nodeValue;
+    var key = raw.trim();
+    if (key && Object.prototype.hasOwnProperty.call(VI, key)) {
+      node.nodeValue = raw.replace(key, VI[key]);
+    }
+  }
+
+  function translateTree(root) {
+    if (root.nodeType === 3) { translateText(root); return; }
+    if (root.nodeType !== 1) return;
+    var walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+    var n;
+    while ((n = walker.nextNode())) translateText(n);
+  }
+
+  function startTranslating() {
+    var stage = document.getElementById('stage');
+    translateTree(stage);
+    new MutationObserver(function (mutations) {
+      mutations.forEach(function (m) {
+        if (m.type === 'characterData') { translateText(m.target); return; }
+        m.addedNodes.forEach(translateTree);
+      });
+    }).observe(stage, { childList: true, subtree: true, characterData: true });
+  }
+
   function launch(name, buffer) {
     errorEl.style.display = 'none';
     document.getElementById('picker').style.display = 'none';
     document.getElementById('stage').style.display = 'block';
+
+    startTranslating();
 
     var file = new File([buffer], name);
     window.EJS_player = '#game';
