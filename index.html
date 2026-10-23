@@ -6,6 +6,10 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="theme-color" content="#0b0f14">
+<meta name="apple-mobile-web-app-title" content="GBA Player">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon-192.png">
+<link rel="apple-touch-icon" href="icon-192.png">
 <title>GBA Player</title>
 <style>
   :root { color-scheme: dark; }
@@ -54,8 +58,9 @@
 
   <p id="intro">Chọn file ROM (.gba hoặc .zip) trong máy để chơi. Game chạy ngay trên điện thoại của bạn, file không được tải lên đâu cả. Lần sau mở lại, trang sẽ nhớ ROM này.</p>
   <label class="btn" id="pickLabel" for="rom">Chọn file ROM</label>
-  <input id="rom" type="file" accept=".gba,.zip,.7z">
+  <input id="rom" type="file">
   <p id="error"></p>
+  <p class="note">Lần đầu mở cần có mạng để tải trình giả lập. Sau đó bạn chơi được cả khi không có mạng.</p>
   <p class="note">Trang này không chứa ROM. Bạn cần tự chuẩn bị file ROM hợp pháp (tự dump từ băng game của mình).</p>
 </div>
 
@@ -330,6 +335,13 @@
       showError('Không tải được emulator. Kiểm tra kết nối mạng rồi thử lại.');
     };
     document.body.appendChild(s);
+  }
+
+  // Cho phép cài trang như một ứng dụng và mở lại khi mất mạng.
+  if ('serviceWorker' in navigator) {
+    window.addEventListener('load', function () {
+      navigator.serviceWorker.register('sw.js').catch(function () {});
+    });
   }
 
   // Mở trang: nếu đã có ROM lưu từ lần trước thì hiện nút "Chơi tiếp".

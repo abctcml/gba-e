@@ -1,0 +1,8 @@
+{
+  "appId": "com.gbaplayer.app",
+  "appName": "GBA Player",
+  "webDir": "www",
+  "server": {
+    "androidScheme": "https"
+  }
+}
