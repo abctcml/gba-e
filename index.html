@@ -1,0 +1,181 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="theme-color" content="#0b0f14">
+<title>GBA Player</title>
+<style>
+  :root { color-scheme: dark; }
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0; height: 100%;
+    background: #0b0f14; color: #e8eef5;
+    font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  }
+  #picker {
+    min-height: 100%;
+    display: flex; flex-direction: column;
+    align-items: center; justify-content: center;
+    gap: 14px; padding: 24px 20px; text-align: center;
+  }
+  h1 { margin: 0; font-size: 24px; font-weight: 700; }
+  p { margin: 0; max-width: 340px; line-height: 1.5; color: #a9b6c6; font-size: 15px; }
+  .btn {
+    display: inline-block; padding: 14px 28px; min-width: 220px;
+    background: #4f8cff; color: #fff;
+    border-radius: 12px; font-size: 17px; font-weight: 600;
+    cursor: pointer; border: 0; font-family: inherit;
+  }
+  .btn.secondary { background: #1b2430; color: #e8eef5; font-weight: 500; font-size: 15px; padding: 11px 24px; }
+  .btn:active { transform: scale(0.98); }
+  input[type=file] { display: none; }
+  #error { color: #ff8a8a; display: none; }
+  .note { font-size: 13px; color: #7c8a9b; }
+  #saved { display: none; flex-direction: column; align-items: center; gap: 10px; }
+  #saved .name { color: #e8eef5; font-size: 14px; word-break: break-word; }
+  #stage { position: fixed; inset: 0; display: none; background: #000; }
+  #game { width: 100%; height: 100%; }
+</style>
+</head>
+<body>
+
+<div id="picker">
+  <h1>GBA Player</h1>
+
+  <div id="saved">
+    <p>ROM đã lưu trong trình duyệt này:</p>
+    <p class="name" id="savedName"></p>
+    <button class="btn" id="resume" type="button">Chơi tiếp</button>
+    <button class="btn secondary" id="forget" type="button">Xóa ROM đã lưu</button>
+  </div>
+
+  <p id="intro">Chọn file ROM (.gba hoặc .zip) trong máy để chơi. Game chạy ngay trên điện thoại của bạn, file không được tải lên đâu cả. Lần sau mở lại, trang sẽ nhớ ROM này.</p>
+  <label class="btn" id="pickLabel" for="rom">Chọn file ROM</label>
+  <input id="rom" type="file" accept=".gba,.zip,.7z">
+  <p id="error"></p>
+  <p class="note">Trang này không chứa ROM. Bạn cần tự chuẩn bị file ROM hợp pháp (tự dump từ băng game của mình).</p>
+</div>
+
+<div id="stage"><div id="game"></div></div>
+
+<script>
+  var input = document.getElementById('rom');
+  var errorEl = document.getElementById('error');
+  var savedBox = document.getElementById('saved');
+
+  /* ---- Lưu ROM trong IndexedDB của trình duyệt (chỉ nằm trên máy này) ---- */
+  function openDb() {
+    return new Promise(function (resolve, reject) {
+      var req = indexedDB.open('gba-player', 1);
+      req.onupgradeneeded = function () { req.result.createObjectStore('roms'); };
+      req.onsuccess = function () { resolve(req.result); };
+      req.onerror = function () { reject(req.error); };
+    });
+  }
+  function saveRom(name, buffer) {
+    return openDb().then(function (db) {
+      return new Promise(function (resolve, reject) {
+        var tx = db.transaction('roms', 'readwrite');
+        tx.objectStore('roms').put({ name: name, buffer: buffer }, 'current');
+        tx.oncomplete = resolve;
+        tx.onerror = function () { reject(tx.error); };
+      });
+    });
+  }
+  function loadRom() {
+    return openDb().then(function (db) {
+      return new Promise(function (resolve, reject) {
+        var req = db.transaction('roms').objectStore('roms').get('current');
+        req.onsuccess = function () { resolve(req.result || null); };
+        req.onerror = function () { reject(req.error); };
+      });
+    });
+  }
+  function clearRom() {
+    return openDb().then(function (db) {
+      return new Promise(function (resolve, reject) {
+        var tx = db.transaction('roms', 'readwrite');
+        tx.objectStore('roms').delete('current');
+        tx.oncomplete = resolve;
+        tx.onerror = function () { reject(tx.error); };
+      });
+    });
+  }
+
+  function showError(msg) {
+    errorEl.textContent = msg;
+    errorEl.style.display = 'block';
+    document.getElementById('picker').style.display = 'flex';
+    document.getElementById('stage').style.display = 'none';
+  }
+
+  function showSaved(rom) {
+    document.getElementById('savedName').textContent = rom.name;
+    savedBox.style.display = 'flex';
+    document.getElementById('intro').style.display = 'none';
+    document.getElementById('pickLabel').textContent = 'Chọn ROM khác';
+    document.getElementById('pickLabel').className = 'btn secondary';
+    document.getElementById('resume').onclick = function () { launch(rom.name, rom.buffer); };
+  }
+
+  function showEmpty() {
+    savedBox.style.display = 'none';
+    document.getElementById('intro').style.display = 'block';
+    document.getElementById('pickLabel').textContent = 'Chọn file ROM';
+    document.getElementById('pickLabel').className = 'btn';
+  }
+
+  document.getElementById('forget').onclick = function () {
+    clearRom().then(showEmpty).catch(function () {
+      showError('Không xóa được ROM đã lưu. Thử xóa dữ liệu trang trong cài đặt trình duyệt.');
+    });
+  };
+
+  input.addEventListener('change', function () {
+    var file = input.files && input.files[0];
+    if (!file) return;
+    if (!/\.(gba|zip|7z)$/i.test(file.name)) {
+      showError('File không đúng định dạng. Hãy chọn file .gba hoặc .zip.');
+      return;
+    }
+    file.arrayBuffer().then(function (buffer) {
+      // Lưu để lần sau không phải chọn lại. Nếu lưu lỗi vẫn chơi bình thường.
+      saveRom(file.name, buffer).catch(function () {});
+      launch(file.name, buffer);
+    }).catch(function () {
+      showError('Không đọc được file. Hãy thử chọn lại.');
+    });
+  });
+
+  function launch(name, buffer) {
+    errorEl.style.display = 'none';
+    document.getElementById('picker').style.display = 'none';
+    document.getElementById('stage').style.display = 'block';
+
+    var file = new File([buffer], name);
+    window.EJS_player = '#game';
+    window.EJS_core = 'gba';
+    window.EJS_gameName = name.replace(/\.[^.]+$/, '');
+    window.EJS_gameUrl = URL.createObjectURL(file);
+    window.EJS_pathtodata = 'https://cdn.emulatorjs.org/stable/data/';
+    window.EJS_startOnLoaded = true;
+    window.EJS_color = '#4f8cff';
+
+    var s = document.createElement('script');
+    s.src = window.EJS_pathtodata + 'loader.js';
+    s.onerror = function () {
+      showError('Không tải được emulator. Kiểm tra kết nối mạng rồi thử lại.');
+    };
+    document.body.appendChild(s);
+  }
+
+  // Mở trang: nếu đã có ROM lưu từ lần trước thì hiện nút "Chơi tiếp".
+  if (window.indexedDB) {
+    loadRom().then(function (rom) { if (rom) showSaved(rom); }).catch(function () {});
+  }
+</script>
+</body>
+</html>
